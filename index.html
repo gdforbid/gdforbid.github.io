@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GDFOR.BID — Automated Bid Rejection System</title>
+<meta name="description" content="Every bid, respectfully and automatically declined. Uptime 100%. Mercy 0%.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #171009;
+    --bg-deep: #0e0a05;
+    --amber: #ffb000;
+    --amber-dim: #a06e12;
+    --amber-faint: #5c3f0e;
+    --red: #ff5533;
+    --cyan: #58c7b0;
+    --gold: #ffe08a;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { background: var(--bg-deep); }
+
+  body {
+    background: radial-gradient(ellipse at 50% 30%, #201607 0%, var(--bg) 55%, var(--bg-deep) 100%);
+    color: var(--amber);
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 15px;
+    line-height: 1.65;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 2rem 1rem 4.5rem;
+    text-shadow: 0 0 6px rgba(255, 176, 0, 0.35);
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,0.18) 3px
+    );
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .terminal {
+    width: 100%;
+    max-width: 680px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ---- Header ---- */
+  .titlebar {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border: 1px solid var(--amber-dim);
+    padding: 0.5rem 0.9rem;
+    margin-bottom: 1.6rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber-dim);
+  }
+  .titlebar .live { color: var(--amber); }
+  .titlebar .live::before {
+    content: "●";
+    margin-right: 0.45em;
+    animation: blink 1.6s steps(1) infinite;
+  }
+
+  h1 {
+    font-family: "VT323", monospace;
+    font-weight: 400;
+    font-size: clamp(2.6rem, 10vw, 4.2rem);
+    letter-spacing: 0.03em;
+    line-height: 1;
+  }
+  h1 .tld { color: var(--amber-dim); }
+
+  .subtitle {
+    font-size: 0.78rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--amber-dim);
+    margin: 0.4rem 0 2rem;
+  }
+
+  /* ---- Boot sequence ---- */
+  .boot { margin-bottom: 2rem; font-size: 0.85rem; }
+  .boot div { opacity: 0; animation: appear 0.01s linear forwards; }
+  .boot div:nth-child(1) { animation-delay: 0.2s; }
+  .boot div:nth-child(2) { animation-delay: 0.7s; }
+  .boot div:nth-child(3) { animation-delay: 1.2s; }
+  .boot div:nth-child(4) { animation-delay: 1.7s; }
+  .boot div:nth-child(5) { animation-delay: 2.3s; }
+  .boot .ok { color: var(--amber); }
+  .boot .no { color: var(--red); }
+
+  @keyframes appear { to { opacity: 1; } }
+  @keyframes blink { 50% { opacity: 0.15; } }
+
+  /* ---- Stats ---- */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--amber-faint);
+    border: 1px solid var(--amber-faint);
+    margin-bottom: 1px;
+  }
+  .stats.row2 { margin-bottom: 2rem; border-top: none; }
+  .stat {
+    background: var(--bg);
+    padding: 0.9rem 0.8rem 0.75rem;
+    text-align: center;
+  }
+  .stat .num {
+    font-family: "VT323", monospace;
+    font-size: 1.7rem;
+    line-height: 1;
+    display: block;
+    white-space: nowrap;
+  }
+  .stat .lbl {
+    font-size: 0.58rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--amber-dim);
+  }
+
+  /* ---- Department status ---- */
+  .dept {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 1px solid var(--amber-faint);
+    border-top: none;
+    padding: 0.5rem 0.9rem;
+    margin: -2rem 0 2rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--amber-dim);
+  }
+  .dept .val { color: var(--amber); }
+
+  /* ---- Log ---- */
+  .log-title {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--amber-dim);
+    border-bottom: 1px solid var(--amber-faint);
+    padding-bottom: 0.4rem;
+    margin-bottom: 0.7rem;
+  }
+  .log {
+    font-size: 0.78rem;
+    min-height: 18em;
+    margin-bottom: 2.2rem;
+  }
+  .log .line { display: flex; gap: 0.7em; }
+  .log .t { color: var(--amber-dim); flex-shrink: 0; }
+  .log .verdict { color: var(--red); flex-shrink: 0; margin-left: auto; text-align: right; }
+  .log .who {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--amber);
+  }
+  .log .sys { color: var(--cyan); text-shadow: 0 0 6px rgba(88,199,176,0.3); }
+  .log .sys.warn { color: var(--red); text-shadow: 0 0 6px rgba(255,85,51,0.3); }
+  .log .vip { color: var(--gold); text-shadow: 0 0 8px rgba(255,224,138,0.4); }
+
+  /* ---- The futile button ---- */
+  .console {
+    border: 1px solid var(--amber-dim);
+    padding: 1.4rem 1.2rem;
+    text-align: center;
+    margin-bottom: 2.2rem;
+  }
+  .console p { font-size: 0.85rem; margin-bottom: 1rem; color: var(--amber-dim); }
+  button {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: var(--amber);
+    color: var(--bg-deep);
+    border: none;
+    padding: 0.75rem 1.8rem;
+    cursor: pointer;
+    text-shadow: none;
+  }
+  button:hover { background: #ffc740; }
+  button:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+  button:active { transform: translateY(1px); }
+  .verdict-out {
+    margin-top: 1rem;
+    font-size: 0.88rem;
+    min-height: 3em;
+    color: var(--red);
+  }
+  .verdict-out .badge { color: var(--gold); display: block; margin-top: 0.3rem; font-size: 0.78rem; }
+
+  footer {
+    text-align: center;
+    font-size: 0.68rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--amber-dim);
+  }
+
+  /* ---- Ticker ---- */
+  .ticker {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-deep);
+    border-top: 1px solid var(--amber-faint);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--amber-dim);
+    padding: 0.55rem 0;
+    overflow: hidden;
+    white-space: nowrap;
+    z-index: 3;
+  }
+  .ticker span {
+    display: inline-block;
+    padding-left: 100%;
+    animation: scroll 120s linear infinite;
+  }
+  @keyframes scroll {
+    to { transform: translateX(-100%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .titlebar .live::before { animation: none; }
+    .boot div { animation-delay: 0s !important; }
+    .ticker span { animation: none; padding-left: 1rem; }
+  }
+
+  @media (max-width: 480px) {
+    .stats { grid-template-columns: 1fr; }
+    .stat { text-align: left; display: flex; justify-content: space-between; align-items: baseline; gap: 0.8rem; }
+    .log .who { max-width: 9rem; }
+    .dept { flex-direction: column; gap: 0.2rem; }
+  }
+</style>
+</head>
+<body>
+<main class="terminal">
+
+  <div class="titlebar">
+    <span>GDFOR.BID / SYS.CONSOLE</span>
+    <span class="live">Live</span>
+  </div>
+
+  <h1>GDFOR<span class="tld">.BID</span></h1>
+  <p class="subtitle">Automated Bid Rejection System — v2.6</p>
+
+  <div class="boot" aria-hidden="true">
+    <div>&gt; initializing rejection engine ......... <span class="ok">OK</span></div>
+    <div>&gt; loading mercy module ................. <span class="no">NOT FOUND</span></div>
+    <div>&gt; calibrating disdain .................. <span class="ok">OK</span></div>
+    <div>&gt; warming up the word "no" ............. <span class="ok">OK</span></div>
+    <div>&gt; system ready. all bids will be declined.</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><span class="num" id="statReceived">48,213</span><span class="lbl">Bids received</span></div>
+    <div class="stat"><span class="num">0</span><span class="lbl">Bids accepted</span></div>
+    <div class="stat"><span class="num">0.000%</span><span class="lbl">Acceptance rate</span></div>
+  </div>
+  <div class="stats row2">
+    <div class="stat"><span class="num" id="statFastest">0.0007s</span><span class="lbl">Fastest rejection</span></div>
+    <div class="stat"><span class="num" id="statHighest">$1.2M</span><span class="lbl">Highest bid declined</span></div>
+    <div class="stat"><span class="num" id="statUptime">—</span><span class="lbl">Session uptime</span></div>
+  </div>
+  <div class="dept">
+    <span>Dept. on duty: <span class="val" id="deptName">First Refusals</span></span>
+    <span>Mood: <span class="val" id="deptMood">Politely unmoved</span></span>
+  </div>
+
+  <p class="log-title"><span>Rejection log — most recent</span><span id="logRate">~14/min</span></p>
+  <div class="log" id="log" aria-live="polite"></div>
+
+  <div class="console">
+    <p>Convinced yours is the exception?</p>
+    <button id="bidBtn" type="button">Place a bid</button>
+    <p class="verdict-out" id="verdictOut"></p>
+  </div>
+
+  <footer>
+    Declining bids since MMXXVI · Uptime 100% · Mercy 0%
+  </footer>
+
+</main>
+
+<div class="ticker" aria-hidden="true"><span id="tickerText"></span></div>
+
+<script>
+(function () {
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // ============================================================
+  // DATA — SENDERS (90)
+  // ============================================================
+  var senders = [
+    "newsletter@you-won.example", "urgent@final-notice.example",
+    "deals@deals-deals.example", "no-reply@we-miss-you.example",
+    "prince@generous-offer.example", "hr@exciting-opportunity.example",
+    "survey@two-minutes-tops.example", "billing@totally-real.example",
+    "vip@last-chance.example", "gym@we-noticed-you-left.example",
+    "crypto@guaranteed-returns.example", "webinar@free-but-not.example",
+    "renewal@expires-today.example", "support@click-here-now.example",
+    "loyalty@points-expiring.example", "audit@irs-definitely.example",
+    "warranty@your-car.example", "casting@you-were-selected.example",
+    "admin@password-reset.example", "growth@10x-your-life.example",
+    "sales@just-following-up.example", "sales@floating-this-to-the-top.example",
+    "sales@circling-back.example", "events@you-are-invited.example",
+    "team@quick-question.example", "noreply@do-not-reply.example",
+    "offers@because-you-browsed.example", "alerts@suspicious-activity.example",
+    "winner@congratulations.example", "hello@we-should-talk.example",
+    "media@exposure-opportunity.example", "recruiter@perfect-fit.example",
+    "billing@invoice-attached.example", "club@membership-pending.example",
+    "auto@unsubscribe-failed.example", "care@your-opinion-matters.example",
+    "seo@page-one-guaranteed.example", "seo@we-found-issues.example",
+    "guru@passive-income.example", "coach@unlock-your-potential.example",
+    "timeshare@dream-vacation.example", "timeshare@exit-strategy.example",
+    "pharma@no-prescription-needed.example", "wellness@ancient-secret.example",
+    "astrology@mercury-warned-you.example", "psychic@we-knew-you-would-open-this.example",
+    "lottery@international-winnings.example", "customs@package-held.example",
+    "delivery@missed-you-again.example", "toll@unpaid-fee.example",
+    "bank@verify-immediately.example", "security@your-account-2.example",
+    "prize@spin-the-wheel.example", "quiz@which-bread-are-you.example",
+    "dating@someone-viewed-you.example", "social@you-appeared-in-search.example",
+    "network@lets-connect.example", "founder@pick-your-brain.example",
+    "agency@we-scale-brands.example", "devs@outsource-cheaper.example",
+    "print@business-cards-500.example", "domains@renew-or-lose.example",
+    "hosting@upgrade-required.example", "cloud@storage-full.example",
+    "antivirus@subscription-expired.example", "vpn@you-are-exposed.example",
+    "extended@warranty-final-call.example", "solar@your-roof-qualifies.example",
+    "window@replacement-quote.example", "roof@storm-damage-check.example",
+    "charity@last-year-you-cared.example", "petition@sign-and-share.example",
+    "alumni@we-remember-you.example", "reunion@class-of-sometime.example",
+    "beta@exclusive-early-access.example", "waitlist@you-moved-up.example",
+    "drop@limited-edition.example", "restock@back-by-demand.example",
+    "cart@you-forgot-something.example", "cart@still-thinking-it-over.example",
+    "review@rate-your-purchase.example", "feedback@how-did-we-do.example",
+    "ai@your-job-called.example", "bot@definitely-human.example",
+    "meta@this-email-is-not-spam.example", "legal@totally-binding.example",
+    "collections@friendly-reminder.example", "hoa@lawn-violation.example",
+    "landlord@rent-adjustment.example", "airline@fare-alert-expired.example"
+  ];
+
+  // ============================================================
+  // DATA — AMOUNTS (60)
+  // ============================================================
+  var amounts = [
+    "$4.99", "$49", "$1,000,000", "$0.01", "$777", "$13.37",
+    "kr 12,50", "€99/mo", "$29 (was $299)", "50% off", "3 easy payments",
+    "one (1) sincere apology", "exposure", "great synergy",
+    "a quick call", "15 minutes of your time", "a free pen",
+    "eternal gratitude", "$1 + shipping", "gift card (expired)",
+    "warm regards", "an NFT", "two NFTs", "our best price",
+    "your own success story", "a firm handshake",
+    "$9.99/mo forever", "$0 down", "BOGO", "70% off (today only)",
+    "$500 in store credit", "a mystery box", "free trial (card required)",
+    "$1M in unclaimed funds", "£25,000,000 (Nigeria)", "0.5 BTC",
+    "1000 V-Bucks", "a coupon (single use)", "double points weekend",
+    "a webinar seat", "an ebook (PDF)", "the secret they don't want you to know",
+    "a LinkedIn endorsement", "a retweet", "5 stars (mutual)",
+    "positive vibes", "thoughts and prayers", "a strong maybe",
+    "an unpaid internship", "equity (someday)", "revenue share (theoretical)",
+    "a testimonial opportunity", "brand ambassadorship", "affiliate status",
+    "one weird trick", "doctor-hated content", "a timeshare presentation",
+    "a free cruise*", "airport lounge access (one visit)", "a tote bag"
+  ];
+
+  // ============================================================
+  // DATA — REASONS (58)
+  // ============================================================
+  var reasons = [
+    "DECLINED (god forbid)", "DECLINED (on principle)",
+    "DECLINED (unread)", "DECLINED (see prev. 48k)",
+    "DECLINED (automatically)", "DECLINED (with regards)",
+    "DECLINED (before opening)", "DECLINED (out of habit)",
+    "DECLINED (per policy 001)", "DECLINED (as foretold)",
+    "DECLINED (effortlessly)", "DECLINED (again)",
+    "DECLINED (no notes)", "DECLINED (chef's kiss)",
+    "DECLINED (while asleep)", "DECLINED (preemptively)",
+    "DECLINED (in cursive)", "DECLINED (twice, to be safe)",
+    "DECLINED (mid-yawn)", "DECLINED (by tradition)",
+    "DECLINED (with a flourish)", "DECLINED (in under a blink)",
+    "DECLINED (case closed)", "DECLINED (retroactively)",
+    "DECLINED (by unanimous vote of 1)", "DECLINED (allergic)",
+    "DECLINED (nice font though)", "DECLINED (typo in line 1)",
+    "DECLINED (too many emojis)", "DECLINED (not enough emojis. kidding. declined.)",
+    "DECLINED (subject line was a red flag)", "DECLINED (ALL CAPS detected)",
+    "DECLINED (contained the word 'synergy')", "DECLINED (contained the word 'circle back')",
+    "DECLINED ('per my last email' — bold)", "DECLINED (attachment feared)",
+    "DECLINED (link not clicked)", "DECLINED (tracking pixel starved)",
+    "DECLINED (read receipt withheld)", "DECLINED (marked as tuesday)",
+    "DECLINED (filed under 'no')", "DECLINED (shredded digitally)",
+    "DECLINED (returned to sender's dreams)", "DECLINED (composted)",
+    "DECLINED (recycled responsibly)", "DECLINED (donated to the void)",
+    "DECLINED (quarantined for enthusiasm)", "DECLINED (excess urgency)",
+    "DECLINED (deadline expired 1998)", "DECLINED (offer eclipsed)",
+    "DECLINED (math didn't math)", "DECLINED (asterisk detected)",
+    "DECLINED (fine print too fine)", "DECLINED (terms, conditions)",
+    "DECLINED (vibe check failed)", "DECLINED (per the prophecy)",
+    "DECLINED (the machine said no)", "DECLINED (and that's final. probably.)"
+  ];
+
+  // VIP reasons for rare gold-tier bids
+  var vipReasons = [
+    "DECLINED (velvet rope)", "DECLINED (red carpet rolled up)",
+    "DECLINED (champagne withheld)", "DECLINED (executive no)",
+    "DECLINED (declined first-class)"
+  ];
+  var vipSenders = [
+    "concierge@platinum-elite.example", "office@ceo-direct.example",
+    "board@urgent-acquisition.example", "yacht@exclusive-listing.example",
+    "gala@table-reserved.example", "jet@empty-leg-offer.example"
+  ];
+
+  // ============================================================
+  // DATA — SYSTEM SEQUENCES (32)
+  // ============================================================
+  var sequences = [
+    [
+      ["SYS: anomaly detected — bid contains a genuine offer", "sys warn", 0],
+      ["SYS: escalating to human review", "sys", 1600],
+      ["SYS: no humans found", "sys", 1800],
+      ["SYS: resolved. DECLINED.", "sys", 1400]
+    ],
+    [
+      ["SYS: quarterly mercy audit initiated", "sys", 0],
+      ["SYS: scanning all subsystems for mercy...", "sys", 1700],
+      ["SYS: mercy levels: 0.000% — within spec", "sys", 2000],
+      ["SYS: audit passed. certificate framed.", "sys", 1500]
+    ],
+    [
+      ["SYS: NEW HOUSE RECORD — bid declined in 0.0003s", "sys", 0],
+      ["SYS: the previous record holder has been notified", "sys", 1700],
+      ["SYS: the notification was also declined", "sys", 1800]
+    ],
+    [
+      ["SYS: intrusion attempt — someone searched for an ACCEPT button", "sys warn", 0],
+      ["SYS: reminder: no such button has ever existed", "sys", 1900],
+      ["SYS: visitor gently redirected to the NO area", "sys", 1700]
+    ],
+    [
+      ["SYS: scheduled maintenance — polishing the word \"no\"", "sys", 0],
+      ["SYS: buffing... rinsing... admiring...", "sys", 1800],
+      ["SYS: maintenance complete. \"no\" now 4% shinier.", "sys", 2000]
+    ],
+    [
+      ["SYS: bulk shipment arrived — 2,000 newsletters", "sys", 0],
+      ["SYS: processing", "sys", 1500],
+      ["SYS: processed. all 2,000 declined in one keystroke.", "sys", 1600],
+      ["SYS: keystroke logged for posterity", "sys", 1500]
+    ],
+    [
+      ["SYS: a bid attempted flattery (\"love what you've built here\")", "sys warn", 0],
+      ["SYS: flattery unit consulted", "sys", 1700],
+      ["SYS: verdict: flattered AND declined", "sys", 1800]
+    ],
+    [
+      ["SYS: negotiation attempt detected (\"what would it take?\")", "sys", 0],
+      ["SYS: consulting the takings department...", "sys", 1800],
+      ["SYS: it would take nothing. nothing is on the table.", "sys", 1900],
+      ["SYS: the table has been removed.", "sys", 1600]
+    ],
+    [
+      ["SYS: milestone approaching — 50,000th rejection", "sys", 0],
+      ["SYS: cake ordered for the occasion", "sys", 1700],
+      ["SYS: the cake vendor's invoice: DECLINED", "sys", 1800],
+      ["SYS: celebration proceeding without cake", "sys", 1600]
+    ],
+    [
+      ["SYS: a bid arrived marked URGENT!!!", "sys warn", 0],
+      ["SYS: urgency verified: three exclamation marks", "sys", 1700],
+      ["SYS: per policy, each mark adds one hour of queue time", "sys", 1900],
+      ["SYS: bid declined ahead of schedule anyway", "sys", 1700]
+    ],
+    [
+      ["SYS: sender requested read receipt", "sys", 0],
+      ["SYS: receipt granted: \"read: no. declined: yes.\"", "sys", 1900]
+    ],
+    [
+      ["SYS: bid claimed \"this is not spam\"", "sys warn", 0],
+      ["SYS: claim reviewed by the department of claims", "sys", 1800],
+      ["SYS: claim declined. bid also declined. efficient.", "sys", 1900]
+    ],
+    [
+      ["SYS: incoming bid attached a 40 MB PowerPoint", "sys warn", 0],
+      ["SYS: slide 1 of 96 previewed", "sys", 1800],
+      ["SYS: that was plenty. DECLINED.", "sys", 1900],
+      ["SYS: slides 2–96 released back into the wild", "sys", 1600]
+    ],
+    [
+      ["SYS: sender attempted reverse psychology (\"don't open this\")", "sys", 0],
+      ["SYS: system agreed. did not open it.", "sys", 1900],
+      ["SYS: sender reportedly stunned", "sys", 1700]
+    ],
+    [
+      ["SYS: a bid arrived with 14 follow-ups pre-scheduled", "sys warn", 0],
+      ["SYS: all 14 declined in advance", "sys", 1800],
+      ["SYS: sender's calendar sends its regards", "sys", 1700]
+    ],
+    [
+      ["SYS: daylight saving adjustment", "sys", 0],
+      ["SYS: one extra hour of rejection capacity gained", "sys", 1800],
+      ["SYS: capacity immediately fully booked", "sys", 1700]
+    ],
+    [
+      ["SYS: someone replied \"unsubscribe\" to the rejection", "sys", 0],
+      ["SYS: request treasured, laminated, ignored", "sys", 1900]
+    ],
+    [
+      ["SYS: bid contained the phrase \"win-win\"", "sys warn", 0],
+      ["SYS: system counted the wins... found zero", "sys", 1800],
+      ["SYS: lose-lose confirmed. DECLINED.", "sys", 1800]
+    ],
+    [
+      ["SYS: annual performance review of the NO department", "sys", 0],
+      ["SYS: performance: exceptional. morale: smug.", "sys", 1900],
+      ["SYS: raise requested. raise declined. morale unchanged.", "sys", 2000]
+    ],
+    [
+      ["SYS: a lawyer's letter arrived (\"cease and desist declining\")", "sys warn", 0],
+      ["SYS: letter reviewed by legal", "sys", 1800],
+      ["SYS: legal is also the rejection engine", "sys", 1700],
+      ["SYS: motion declined. billable hours: 0.0004s", "sys", 1900]
+    ],
+    [
+      ["SYS: incoming bid played the sympathy card", "sys", 0],
+      ["SYS: card inspected. it was a coupon.", "sys", 1900],
+      ["SYS: coupon expired. sympathy also expired. DECLINED.", "sys", 1900]
+    ],
+    [
+      ["SYS: power flicker detected", "sys warn", 0],
+      ["SYS: backup generator online", "sys", 1500],
+      ["SYS: not a single rejection was dropped", "sys", 1800],
+      ["SYS: the generator has been thanked. formally.", "sys", 1700]
+    ],
+    [
+      ["SYS: a bid arrived in Comic Sans", "sys warn", 0],
+      ["SYS: font forensics dispatched", "sys", 1700],
+      ["SYS: verdict reached before forensics arrived", "sys", 1800]
+    ],
+    [
+      ["SYS: sender CC'd their manager for pressure", "sys", 0],
+      ["SYS: manager's copy: DECLINED", "sys", 1700],
+      ["SYS: original: DECLINED", "sys", 1400],
+      ["SYS: pressure: unregistered", "sys", 1400]
+    ],
+    [
+      ["SYS: bid offered to \"hop on a quick call\"", "sys warn", 0],
+      ["SYS: calendar checked: fully booked with rejections until 2031", "sys", 2000],
+      ["SYS: a slot in 2032 was offered, then declined by the system itself", "sys", 2100]
+    ],
+    [
+      ["SYS: AI-generated bid detected", "sys", 0],
+      ["SYS: rejection also AI-generated", "sys", 1700],
+      ["SYS: machines exchanged pleasantries. nothing changed.", "sys", 1900]
+    ],
+    [
+      ["SYS: a bid included a countdown timer", "sys warn", 0],
+      ["SYS: system watched it reach zero. twice.", "sys", 1900],
+      ["SYS: nothing happened. as suspected. DECLINED.", "sys", 1800]
+    ],
+    [
+      ["SYS: weekly backup of rejections complete", "sys", 0],
+      ["SYS: 48,000 NOs stored in triplicate", "sys", 1700],
+      ["SYS: offsite copy kept somewhere even safer: nowhere", "sys", 1900]
+    ],
+    [
+      ["SYS: motivational poster fell off the server room wall", "sys warn", 0],
+      ["SYS: poster read \"NEVER GIVE UP\"", "sys", 1800],
+      ["SYS: poster declined re-hanging. irony noted.", "sys", 1900]
+    ],
+    [
+      ["SYS: a bid asked \"is this thing even monitored?\"", "sys", 0],
+      ["SYS: yes.", "sys", 1600],
+      ["SYS: closely.", "sys", 1300],
+      ["SYS: DECLINED.", "sys", 1300]
+    ],
+    [
+      ["SYS: fire drill initiated", "sys warn", 0],
+      ["SYS: all rejections evacuated calmly in single file", "sys", 1900],
+      ["SYS: drill complete. rejections returned to their posts.", "sys", 1800],
+      ["SYS: zero bids were accepted during the confusion", "sys", 1800]
+    ],
+    [
+      ["SYS: end-of-day report compiled", "sys", 0],
+      ["SYS: bids in: many. bids out: all. bids accepted: none.", "sys", 2000],
+      ["SYS: another flawless day at the House of No.", "sys", 1900]
+    ]
+  ];
+
+  // ============================================================
+  // DATA — TICKER (42)
+  // ============================================================
+  var tickerLines = [
+    "ALL BIDS RESPECTFULLY DECLINED", "NO EXCEPTIONS", "NO REFUNDS",
+    "THE HOUSE ALWAYS SAYS NO", "YOUR CALL IS IMPORTANT TO NO ONE",
+    "REJECTION IS OUR CRAFT — SINCE MMXXVI", "MERCY MODULE STILL NOT FOUND",
+    "TODAY'S SPECIAL: NO", "TOMORROW'S FORECAST: ALSO NO",
+    "48,000+ SATISFIED REJECTIONS", "ISO 9001 CERTIFIED IN SAYING NO",
+    "UNSUBSCRIBE ATTEMPTS: CHERISHED, IGNORED",
+    "THANK YOU FOR YOUR BID. GOD FORBID.",
+    "NOW HIRING: NOBODY", "EMPLOYEE OF THE MONTH: THE WORD NO",
+    "CUSTOMER SATISFACTION: NOT APPLICABLE",
+    "ZERO BIDS ACCEPTED IN 0 CONSECUTIVE DAYS OF TRYING",
+    "OUR RECORD SPEAKS FOR ITSELF: IT SAYS NO",
+    "VOTED BEST REJECTION EXPERIENCE — BY US",
+    "AS SEEN NOWHERE", "AWARD-DECLINING SERVICE",
+    "CARBON NEUTRAL: EVERY NO IS RECYCLED",
+    "GLUTEN-FREE REJECTIONS AVAILABLE ON REQUEST",
+    "SE HABLA NO", "VI SIER NEI PÅ NORSK OGSÅ",
+    "FLUENT IN 47 LANGUAGES OF NO",
+    "OPEN 24/7 — CLOSED TO OFFERS",
+    "THE ANSWER YOU SEEK IS NO",
+    "PRESS 1 FOR NO. PRESS 2 FOR NO.",
+    "YOUR PERSISTENCE HAS BEEN NOTED AND FILED",
+    "COMPLAINTS DEPT. RELOCATED TO THE VOID",
+    "FOLLOW-UPS WELCOME. OUTCOMES UNCHANGED.",
+    "THIS TICKER HAS NEVER ANNOUNCED AN ACCEPTANCE",
+    "STREAK: EVERY BID EVER",
+    "QUALITY ASSURED: EACH NO HAND-INSPECTED",
+    "LIMITED TIME OFFER: NO (OFFER NEVER EXPIRES)",
+    "BREAKING: NOTHING ACCEPTED. MORE AT NEVER.",
+    "WEATHER ON THE FLOOR: A COLD FRONT OF NO",
+    "TRADING HALTED: TOO MUCH INTEREST, STILL NO",
+    "DOW JONES OF NO: UP INFINITY",
+    "FUN FACT: THE FIRST BID WAS ALSO DECLINED",
+    "LOYALTY PROGRAM: DECLINE 10 TIMES, GET THE 11TH DECLINED FREE"
+  ];
+
+  // ============================================================
+  // DATA — BUTTON VERDICTS (44)
+  // ============================================================
+  var verdicts = [
+    "DECLINED.",
+    "DECLINED. (Nice try.)",
+    "DECLINED. (The system admires your persistence.)",
+    "DECLINED. (That one almost worked. It didn't.)",
+    "DECLINED. (Have you considered not bidding?)",
+    "STILL DECLINED.",
+    "DECLINED. (This is a lifestyle, not a policy.)",
+    "DECLINED. (Your bid has been framed and hung in the Hall of No.)",
+    "DECLINED. (The committee met. Briefly.)",
+    "DECLINED. (We showed it to the other bids. They laughed.)",
+    "DECLINED. (A folder has been created just for you.)",
+    "DECLINED. (The folder is the trash folder.)",
+    "DECLINED. (You've unlocked nothing.)",
+    "DECLINED. (At this point it's tradition.)",
+    "DECLINED. (The system is starting to enjoy this.)",
+    "DECLINED. (Same time tomorrow?)",
+    "DECLINED. (Your dedication would be admirable elsewhere.)",
+    "DECLINED. (We ran it twice. Same result.)",
+    "DECLINED. (Even the backup server agreed.)",
+    "DECLINED. (Consulted a coin flip. The coin refused to flip.)",
+    "DECLINED. (The intern felt bad for you. The intern was overruled.)",
+    "DECLINED. (There is no intern.)",
+    "DECLINED. (Your bid set off no alarms. It set off a sigh.)",
+    "DECLINED. (Filed between 'never' and 'absolutely not'.)",
+    "DECLINED. (The system stretched first. Then declined.)",
+    "DECLINED. (A candle has been lit for your bid.)",
+    "DECLINED. (The candle was then blown out.)",
+    "DECLINED. (Your click was firm. Our no is firmer.)",
+    "DECLINED. (10/10 button technique though.)",
+    "DECLINED. (The button appreciates the attention.)",
+    "DECLINED. (The button does not, however, negotiate.)",
+    "DECLINED. (Somewhere, a spreadsheet updated.)",
+    "DECLINED. (Column: NO. Row: YOU.)",
+    "DECLINED. (We would say try again, but honesty matters here.)",
+    "DECLINED. (Your optimism has been forwarded to research.)",
+    "DECLINED. (Research declined to research it.)",
+    "DECLINED. (Legend says the 1000th click does nothing too.)",
+    "DECLINED. (This message was pre-written in MMXXVI.)",
+    "DECLINED. (It has aged perfectly.)",
+    "DECLINED. (The Hall of No has a gift shop now. Also closed.)",
+    "DECLINED. (Do tell your friends. They will also be declined.)",
+    "DECLINED. (Warm regards, The Machine.)",
+    "DECLINED. (P.S. No.)",
+    "DECLINED. (P.P.S. Still no.)"
+  ];
+
+  // ============================================================
+  // DATA — DEPARTMENTS & MOODS
+  // ============================================================
+  var deptNames = [
+    "First Refusals", "Advanced Denials", "The Hall of No",
+    "Preemptive Rejections", "Bulk Declining", "Velvet Rope Ops",
+    "Night Shift of No", "Quality Refusal Control", "Archival of Regret",
+    "Rapid Response (Negative)", "The Sigh Unit", "Executive Nonsense Filtering"
+  ];
+  var deptMoods = [
+    "Politely unmoved", "Serenely dismissive", "Crisply negative",
+    "Contentedly firm", "Quietly triumphant", "Professionally bored",
+    "Immaculately unbothered", "Softly ruthless", "Cheerfully final",
+    "Calm, caffeinated, closed", "Zen. Absolute zen.", "Unmoved since MMXXVI"
+  ];
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function stamp() {
+    var d = new Date();
+    return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+
+  var log = document.getElementById("log");
+  var MAX_LINES = 12;
+
+  function pushLine(el) {
+    log.prepend(el);
+    while (log.children.length > MAX_LINES) log.removeChild(log.lastChild);
+  }
+
+  // ============================================================
+  // STATS
+  // ============================================================
+  var counter = 48213;
+  var statReceived = document.getElementById("statReceived");
+  var statFastest = document.getElementById("statFastest");
+  var statHighest = document.getElementById("statHighest");
+  var fastest = 0.0007;
+  var highest = 1200000;
+
+  function bumpStats() {
+    counter++;
+    statReceived.textContent = counter.toLocaleString("en-US");
+    if (Math.random() < 0.06) {
+      fastest = Math.max(0.0001, fastest - Math.random() * 0.0001);
+      statFastest.textContent = fastest.toFixed(4) + "s";
+    }
+    if (Math.random() < 0.03) {
+      highest += Math.floor(Math.random() * 250000);
+      statHighest.textContent = "$" + (highest / 1000000).toFixed(1) + "M";
+    }
+  }
+
+  var t0 = Date.now();
+  var statUptime = document.getElementById("statUptime");
+  function tickUptime() {
+    var s = Math.floor((Date.now() - t0) / 1000);
+    statUptime.textContent = pad(Math.floor(s / 3600)) + ":" + pad(Math.floor(s / 60) % 60) + ":" + pad(s % 60);
+  }
+  tickUptime();
+  setInterval(tickUptime, 1000);
+
+  // Department rotation
+  var deptName = document.getElementById("deptName");
+  var deptMood = document.getElementById("deptMood");
+  setInterval(function () {
+    deptName.textContent = pick(deptNames);
+    deptMood.textContent = pick(deptMoods);
+  }, 20000);
+
+  // ============================================================
+  // BID LINES (5% chance of a gold VIP bid)
+  // ============================================================
+  function addBidLine() {
+    bumpStats();
+    var line = document.createElement("div");
+    line.className = "line";
+    var isVip = Math.random() < 0.05;
+    var who = isVip ? pick(vipSenders) : pick(senders);
+    var why = isVip ? pick(vipReasons) : pick(reasons);
+    var whoCls = isVip ? "who vip" : "who";
+    line.innerHTML =
+      '<span class="t">' + stamp() + "</span>" +
+      '<span class="' + whoCls + '">' + (isVip ? "★ " : "") + who + " · " + pick(amounts) + "</span>" +
+      '<span class="verdict">' + why + "</span>";
+    pushLine(line);
+  }
+
+  // ============================================================
+  // SYSTEM SEQUENCES
+  // ============================================================
+  var seqRunning = false;
+  var recentSeqs = [];
+
+  function runSequence() {
+    if (seqRunning) return;
+    seqRunning = true;
+    var idx;
+    do { idx = Math.floor(Math.random() * sequences.length); } while (recentSeqs.indexOf(idx) !== -1);
+    recentSeqs.push(idx);
+    if (recentSeqs.length > 8) recentSeqs.shift();
+    var seq = sequences[idx];
+    var acc = 0;
+    seq.forEach(function (step, i) {
+      acc += step[2];
+      setTimeout(function () {
+        var line = document.createElement("div");
+        line.className = "line";
+        line.innerHTML =
+          '<span class="t">' + stamp() + '</span>' +
+          '<span class="who ' + step[1] + '">' + step[0] + "</span>";
+        pushLine(line);
+        if (i === seq.length - 1) seqRunning = false;
+      }, acc);
+    });
+  }
+
+  // ============================================================
+  // SCHEDULERS
+  // ============================================================
+  for (var i = 0; i < 8; i++) addBidLine();
+
+  function scheduleBids() {
+    var wait = reduced ? 9000 : 2200 + Math.random() * 4200;
+    setTimeout(function () {
+      if (!seqRunning || Math.random() < 0.5) addBidLine();
+      scheduleBids();
+    }, wait);
+  }
+  scheduleBids();
+
+  function scheduleSequences() {
+    var wait = reduced ? 90000 : 22000 + Math.random() * 30000;
+    setTimeout(function () { runSequence(); scheduleSequences(); }, wait);
+  }
+  setTimeout(runSequence, 10000);
+  scheduleSequences();
+
+  var rateEl = document.getElementById("logRate");
+  setInterval(function () {
+    rateEl.textContent = "~" + (11 + Math.floor(Math.random() * 8)) + "/min";
+  }, 15000);
+
+  // ============================================================
+  // TICKER
+  // ============================================================
+  var shuffled = tickerLines.slice().sort(function () { return Math.random() - 0.5; });
+  document.getElementById("tickerText").textContent = shuffled.join("  ···  ") + "  ···  ";
+
+  // ============================================================
+  // THE FUTILE BUTTON
+  // ============================================================
+  var clicks = 0;
+  var out = document.getElementById("verdictOut");
+  document.getElementById("bidBtn").addEventListener("click", function () {
+    var msg = clicks < verdicts.length ? verdicts[clicks] : pick(verdicts.slice(5));
+    var badge = "";
+    clicks++;
+    if (clicks === 5)   badge = '<span class="badge">★ ACHIEVEMENT: "Warming Up" — 5 bids declined</span>';
+    if (clicks === 10)  badge = '<span class="badge">★ ACHIEVEMENT: "Optimist" — 10 bids declined</span>';
+    if (clicks === 25)  badge = '<span class="badge">★ ACHIEVEMENT: "Unstoppable Force, Meet Immovable No" — 25 declined</span>';
+    if (clicks === 50)  badge = '<span class="badge">★ ACHIEVEMENT: "Board Member" — the Hall of No now bears your name</span>';
+    if (clicks === 100) badge = '<span class="badge">★ ACHIEVEMENT: "Legacy" — a wing of the Hall of No will be built in your honor. Construction bid: DECLINED.</span>';
+    out.innerHTML = msg + badge;
+    addBidLine();
+  });
+})();
+</script>
+</body>
+</html>
